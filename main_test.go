@@ -125,7 +125,7 @@ func TestCafeSearch(t *testing.T) {
 			// Проверяем количество найденных кафе
 			assert.Equal(t, tt.wantCount, len(cafes))
 
-			// Проверяем, что каждое название содержит строку search (без учёта регистра)
+			// Проверяем, каждое название содержит строку search (без учёта регистра)
 			for _, c := range cafes {
 				assert.True(t, strings.Contains(strings.ToLower(c), strings.ToLower(tt.search)),
 					"Кафе '%s' не содержит подстроку '%s'", c, tt.search)
