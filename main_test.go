@@ -3,12 +3,15 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
+// Тесты на негативные сценарии
 func TestCafeNegative(t *testing.T) {
 	handler := http.HandlerFunc(mainHandle)
 
@@ -21,6 +24,7 @@ func TestCafeNegative(t *testing.T) {
 		{"/cafe?city=omsk", http.StatusBadRequest, "unknown city"},
 		{"/cafe?city=tula&count=na", http.StatusBadRequest, "incorrect count"},
 	}
+
 	for _, v := range requests {
 		response := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", v.request, nil)
@@ -31,6 +35,7 @@ func TestCafeNegative(t *testing.T) {
 	}
 }
 
+// Тесты на позитивные сценарии (код ответа)
 func TestCafeWhenOk(t *testing.T) {
 	handler := http.HandlerFunc(mainHandle)
 
@@ -39,12 +44,92 @@ func TestCafeWhenOk(t *testing.T) {
 		"/cafe?city=tula",
 		"/cafe?city=moscow&search=ложка",
 	}
+
 	for _, v := range requests {
 		response := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", v, nil)
-
 		handler.ServeHTTP(response, req)
 
 		assert.Equal(t, http.StatusOK, response.Code)
+	}
+}
+
+// Новый тест для проверки параметра count
+func TestCafeCount(t *testing.T) {
+	handler := http.HandlerFunc(mainHandle)
+
+	requests := []struct {
+		count int
+		want  int
+	}{
+		{0, 0},
+		{1, 1},
+		{2, 2},
+		{100, len(cafeList["moscow"])}, // максимум — все кафе города
+	}
+
+	for _, tt := range requests {
+		t.Run("count="+strconv.Itoa(tt.count), func(t *testing.T) {
+			url := "/cafe?city=moscow&count=" + strconv.Itoa(tt.count)
+			req := httptest.NewRequest("GET", url, nil)
+			resp := httptest.NewRecorder()
+
+			handler.ServeHTTP(resp, req)
+
+			require.Equal(t, http.StatusOK, resp.Code)
+
+			body := strings.TrimSpace(resp.Body.String())
+			var cafes []string
+			if body != "" {
+				cafes = strings.Split(body, ",")
+			} else {
+				cafes = []string{}
+			}
+
+			assert.Equal(t, tt.want, len(cafes))
+		})
+	}
+}
+
+// Новый тест для проверки параметра search
+func TestCafeSearch(t *testing.T) {
+	handler := http.HandlerFunc(mainHandle)
+
+	requests := []struct {
+		search    string
+		wantCount int
+	}{
+		{"фасоль", 0},
+		{"кофе", 2},
+		{"вилка", 1},
+	}
+
+	for _, tt := range requests {
+		t.Run("search="+tt.search, func(t *testing.T) {
+			url := "/cafe?city=moscow&search=" + tt.search
+			req := httptest.NewRequest("GET", url, nil)
+			resp := httptest.NewRecorder()
+
+			handler.ServeHTTP(resp, req)
+
+			require.Equal(t, http.StatusOK, resp.Code)
+
+			body := strings.TrimSpace(resp.Body.String())
+			var cafes []string
+			if body != "" {
+				cafes = strings.Split(body, ",")
+			} else {
+				cafes = []string{}
+			}
+
+			// Проверяем количество найденных кафе
+			assert.Equal(t, tt.wantCount, len(cafes))
+
+			// Проверяем, что каждое название содержит строку search (без учёта регистра)
+			for _, c := range cafes {
+				assert.True(t, strings.Contains(strings.ToLower(c), strings.ToLower(tt.search)),
+					"Кафе '%s' не содержит подстроку '%s'", c, tt.search)
+			}
+		})
 	}
 }
